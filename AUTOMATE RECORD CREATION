@@ -1,0 +1,117 @@
+Automate record creation
+
+1.MAINTENANCE REQUEST HELPER 
+
+public with sharing class MaintenanceRequestHelper {
+
+public static void updateWorkOrders(List<Case> CaseList) {
+
+integer i=0;
+
+List<Case> NewCaseList = new List<Case>();
+
+List<Equipment_Maintenance_Item__c> eList = [SELECT Id,Maintenance_Request__c,Equipment__c,Quantity__c
+
+FROM Equipment_Maintenance_Item__c
+
+WHERE Maintenance_Request__c IN: CaseList];
+
+List<Aggregateresult> mindue = new List<Aggregateresult>([SELECT MIN(Equipment__r.Maintenance_Cycle__c)MinimumValue
+
+FROM Equipment_Maintenance_Item__c WHERE Maintenance_Request__c IN: CaseList]);
+
+integer k=0;
+
+List<Equipment_Maintenance_Item__c> newEmi = new List<Equipment_Maintenance_Item__c>();
+
+for(Case c : CaseList){
+
+if(c.Status == 'Closed' && (c.type =='Repair' || c.type =='Routine Maintenance')){
+
+Case c1 = new Case(
+
+Status = 'New',
+
+Vehicle__c = c.Vehicle__c,
+
+Type = 'Routine Maintenance',
+
+Subject = 'Routine Checkup',
+
+Date_Reported__c = Date.today(),
+
+Product__c = c.Product__c,
+
+AccountId = c.AccountId,
+
+ContactId = c.ContactId,
+
+Origin = c.Origin
+
+//Date_Due__c = Date.today()
+
+);
+
+NewCaseList.add(c1);
+
+for(Equipment_Maintenance_Item__c emi : eList){
+
+if(c.Id == emi.Maintenance_Request__c){
+
+newEmi.add(new Equipment_Maintenance_Item__c(
+
+Equipment__c = emi.Equipment__c,
+
+Maintenance_Request__c = c.Id,
+
+Quantity__c = emi.Quantity__c));
+
+}
+
+}
+
+for(Aggregateresult r:mindue){
+
+if(r.get('MinimumValue')!=NULL){
+
+NewCaseList[i].Date_Due__c=system.today()+integer.valueof(r.get('MinimumValue'));
+
+}
+
+i++;
+
+}
+
+}
+
+}
+
+if(NewCaseList.size()>0){
+
+insert NewCaseList;
+
+}
+
+for(Case c2: NewCaseList){
+
+for(Equipment_Maintenance_Item__c emi2 : newEmi){
+
+emi2.Maintenance_Request__c = c2.id;
+
+}
+
+}
+
+insert newEmi;
+
+}
+
+}
+
+MAINTANENCE REQUEST TRIGGER😊
+
+trigger MaintenanceRequest on Case (before update, after update) {
+if(Trigger.isAfter){
+MaintenanceRequestHelper.updateWorkOrders(Trigger.New);
+}}
+
